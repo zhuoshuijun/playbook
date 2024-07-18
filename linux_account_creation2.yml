@@ -1,0 +1,58 @@
+---
+- hosts: "{{ target_host }}"
+  gather_facts: false
+  become: true
+  become_method: su
+
+  tasks:
+    # check if the account already exists
+    - name: check the account existence
+      command: getent passwd "{{ user_name }}"
+      register: user_exist
+      ignore_errors: true
+
+    # terminate the playbook if the account already exists
+    - name: stop account creation
+      fail:
+        msg: "The account {{ user_name }} already exists in {{ target_host }}"
+      when: user_exist.stdout != ""
+
+    # generate account creation playbook according to the parameters
+    - name: generate playbook
+      template:
+        src: "./templates/task_for_linux_account_creation.j2"
+        dest: "/tmp/task_for_{{ target_host }}_{{ user_name }}_creation_{{ task_timestamp }}.yml"
+      delegate_to: localhost
+    
+    - block:
+      # check if the primary group already exists
+      - command: getent group "{{ u_group }}"
+        register: group_exist
+        ignore_errors: true
+    
+      # create the primary group with specified group name and gid
+      - group:
+          name: "{{ u_group }}"
+          gid: "{{ u_gid }}"
+          state: present
+        when:
+          - group_exist.stdout == ""
+          - u_gid is defined
+
+      # create the primary group only with specified group name
+      - group:
+          name: "{{ u_group }}"
+          state: present
+        when:
+          - group_exist.stdout == ""
+      when: u_group != ""
+    
+    # execute the playbook to create the account
+    - include_tasks: "/tmp/task_for_{{ target_host }}_{{ user_name }}_creation_{{ task_timestamp }}.yml"
+
+  handlers:
+    - name: set_up_ssh_config
+      shell: |
+        sed -i 's/^AllowUsers/AllowUsers {{ user_name }}/' /etc/ssh/sshd_config
+        sshd -t
+        systemctl reload sshd

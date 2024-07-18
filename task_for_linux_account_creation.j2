@@ -1,0 +1,32 @@
+# Linux account creation
+- name: linux account creation
+  user:
+    name: "{{ user_name }}"
+{% if u_id %}
+    uid: "{{ u_id }}"
+{% endif %}
+{% if u_group is defined and u_group | length %}
+    group: "{{ u_group }}"
+{% endif %}
+{% if u_groups is defined and u_groups | length %}
+    groups: "{{ u_groups }}"
+{% endif %}
+{% if u_shell is defined and u_shell | length %}
+    shell: "{{ u_shell }}"
+{% endif %}
+{% if u_home is defined and u_home | length %}
+    home: "{{ u_home }}"
+{% endif %}
+{% if u_password is defined and u_password | length %}
+    password: "{{ u_password }}"
+{% endif %}
+{% if password_expire_max is defined %}
+    password_expire_max: "{{ password_expire_max | int }}"
+{% endif %}
+{% if password_expire_min is defined %}
+    password_expire_min: "{{ password_expire_min | int }}"
+{% endif %}
+    append: yes
+    state: present
+  notify:
+    - set_up_ssh_config

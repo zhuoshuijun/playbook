@@ -1,0 +1,53 @@
+---
+- hosts: "{{ target_host }}"
+  gather_facts: false
+  become: true
+  become_method: su
+
+  tasks:
+    # check if the account already exists
+    - name: check the account existence
+      command: getent passwd "{{ user_name }}"
+      register: user_exist
+      ignore_errors: true
+
+    # terminate the playbook if the account already exists
+    - name: stop account creation
+      fail:
+        msg: "The account {{ user_name }} already exists in {{ target_host }}"
+      when: user_exist.stdout != ""
+
+    # check if the primary group already exists
+    - name: check the group existence
+      command: getent group "{{ u_group }}"
+      when: u_group != ""
+      register: group_exist
+      ignore_errors: true
+
+    # generate account creation playbook according to the parameters
+    - name: generate playbook
+      template:
+        src: "./templates/task_for_linux_account_creation.j2"
+        dest: "/tmp/task_for_{{ target_host }}_{{ user_name }}_creation_{{ ansible_date_time }}.yml"
+      delegate_to: localhost
+    
+    # create the primary group with specified group name and gid
+    - name: create group with gid
+      group:
+        name: "{{ u_group }}"
+        gid: "{{ u_gid }}"
+        state: present
+      when:
+        - group_exist is defined and group_exist.stdout == ""
+        - u_gid is defined
+
+    # create the primary group only with specified group name
+    - name: create group without gid
+      group:
+        name: "{{ u_group }}"
+        state: present
+      when:
+        - group_exist is defined and group_exist.stdout == ""
+    
+    # execute the playbook to create the account
+    - include_tasks: "/tmp/task_for_{{ target_host }}_{{ user_name }}_creation_{{ ansible_date_time }}.yml"
